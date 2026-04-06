@@ -246,18 +246,21 @@ with st.sidebar:
     st.divider()
     st.markdown("### 📧 Email Report")
 
-    # Initialise recipient list from config
+    # Initialise recipient list and input counter from config
     if "email_recipients" not in st.session_state:
         st.session_state["email_recipients"] = list(EMAIL_CONFIG.get("recipients", []))
+    if "email_input_gen" not in st.session_state:
+        st.session_state["email_input_gen"] = 0
 
-    # Add a new recipient
+    # Add a new recipient — counter in key forces a blank widget after each add
     new_email = st.text_input("Add recipient", placeholder="friend@gmail.com",
-                              label_visibility="collapsed", key="new_email_input")
+                              label_visibility="collapsed",
+                              key=f"new_email_input_{st.session_state['email_input_gen']}")
     if st.button("➕ Add", use_container_width=True, key="add_email_btn"):
         addr = new_email.strip()
         if addr and "@" in addr and addr not in st.session_state["email_recipients"]:
             st.session_state["email_recipients"].append(addr)
-            st.session_state["new_email_input"] = ""
+            st.session_state["email_input_gen"] += 1  # new key → fresh empty widget
             st.rerun()
         elif addr in st.session_state["email_recipients"]:
             st.toast("Already in list", icon="ℹ️")
