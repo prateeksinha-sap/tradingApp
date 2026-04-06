@@ -451,42 +451,20 @@ def _price_spectrum_bar(ei: dict, current_price: float) -> str:
         "center": "translateX(-50%)",
     }[label_align]
 
-    return f"""
-<div style="margin:12px 0 4px;padding:0 2px;">
-  <!-- bar track -->
-  <div style="position:relative;height:8px;border-radius:6px;background:{gradient};
-              box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);">
-
-    <!-- T1 tick -->
-    <div style="position:absolute;top:0;bottom:0;left:{t1_pct:.1f}%;
-                width:1px;background:rgba(255,255,255,0.25);"></div>
-
-    <!-- current price dot -->
-    <div style="position:absolute;top:50%;left:{price_pct:.1f}%;
-                transform:translate(-50%,-50%);
-                width:13px;height:13px;border-radius:50%;
-                background:#ffffff;
-                box-shadow:0 0 8px rgba(255,255,255,0.7),0 0 0 2px rgba(15,23,42,0.9);
-                z-index:2;">
-    </div>
-
-    <!-- price label above dot -->
-    <div style="position:absolute;bottom:14px;left:{price_pct:.1f}%;
-                transform:{label_transform};
-                font-size:0.6rem;font-weight:700;color:#f1f5f9;
-                white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);">
-      ₹{price:,.0f}
-    </div>
-  </div>
-
-  <!-- axis labels -->
-  <div style="display:flex;justify-content:space-between;margin-top:5px;
-              font-size:0.58rem;letter-spacing:0.2px;">
-    <span style="color:#f87171;">SL ₹{sl:,.0f}</span>
-    <span style="color:#fbbf24;opacity:0.8;">T1 ₹{t1:,.0f}</span>
-    <span style="color:#4ade80;">T2 ₹{t2:,.0f}</span>
-  </div>
-</div>"""
+    return (
+        f'<div style="margin:12px 0 4px;padding:0 2px;">'
+        f'<div style="position:relative;height:8px;border-radius:6px;background:{gradient};box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);">'
+        f'<div style="position:absolute;top:0;bottom:0;left:{t1_pct:.1f}%;width:1px;background:rgba(255,255,255,0.25);"></div>'
+        f'<div style="position:absolute;top:50%;left:{price_pct:.1f}%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#ffffff;box-shadow:0 0 8px rgba(255,255,255,0.7),0 0 0 2px rgba(15,23,42,0.9);z-index:2;"></div>'
+        f'<div style="position:absolute;bottom:14px;left:{price_pct:.1f}%;transform:{label_transform};font-size:0.6rem;font-weight:700;color:#f1f5f9;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);">&#8377;{price:,.0f}</div>'
+        f'</div>'
+        f'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.58rem;letter-spacing:0.2px;">'
+        f'<span style="color:#f87171;">SL &#8377;{sl:,.0f}</span>'
+        f'<span style="color:#fbbf24;opacity:0.8;">T1 &#8377;{t1:,.0f}</span>'
+        f'<span style="color:#4ade80;">T2 &#8377;{t2:,.0f}</span>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def render_pick_card(pick, rank_emoji=""):
