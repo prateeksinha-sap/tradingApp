@@ -20,7 +20,7 @@ from data_fetcher import (
     fetch_nifty_index, fetch_india_vix,
     log_picks, get_picks_history,
 )
-from scoring import rank_stocks
+from scoring import rank_stocks, score_stock
 from news_sentiment import (
     fetch_sentiment_batch, get_cached_sentiment_all,
     is_ollama_running, clear_sentiment_cache,
@@ -172,6 +172,13 @@ div[data-testid="stMetric"] {
 with st.sidebar:
     st.markdown(f"## 🎯 {APP_TITLE}")
     st.caption(APP_SUBTITLE)
+    app_mode = st.radio(
+        "mode",
+        ["🎯 Portfolio Engine", "🔬 Deep Dive"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="app_mode_nav",
+    )
     st.divider()
     st.markdown("### 📊 Allocation")
     st.caption(f"Large: {ALLOCATION['large_cap_pct']}% · Mid: {ALLOCATION['mid_cap_pct']}% · Small: {ALLOCATION['small_cap_pct']}%")
@@ -296,7 +303,312 @@ with st.sidebar:
     st.divider()
     st.caption("⚠️ Decision-support tool, not financial advice. DYOR.")
 
-# ── Header ───────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# SHARED HELPERS — defined before mode routing so both modes can use them
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _price_spectrum_bar(ei: dict, current_price: float) -> str:
+    sl    = ei.get("stop_loss",  0) or 0
+    t1    = ei.get("target_1",   0) or 0
+    t2    = ei.get("target_2",   0) or 0
+    price = current_price or 0
+    span  = t2 - sl
+    if span <= 0 or sl <= 0 or t2 <= 0:
+        return ""
+    t1_pct    = max(0, min(100, (t1    - sl) / span * 100))
+    price_pct = max(0, min(100, (price - sl) / span * 100))
+    gradient  = (f"linear-gradient(to right,#ef4444 0%,#f59e0b {t1_pct:.1f}%,#22c55e 100%)")
+    label_align = "right" if price_pct > 85 else ("left" if price_pct < 15 else "center")
+    label_transform = {"right": "translateX(-100%)", "left": "translateX(0%)", "center": "translateX(-50%)"}[label_align]
+    return (
+        f'<div style="margin:12px 0 4px;padding:0 2px;">'
+        f'<div style="position:relative;height:8px;border-radius:6px;background:{gradient};box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);">'
+        f'<div style="position:absolute;top:0;bottom:0;left:{t1_pct:.1f}%;width:1px;background:rgba(255,255,255,0.25);"></div>'
+        f'<div style="position:absolute;top:50%;left:{price_pct:.1f}%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#ffffff;box-shadow:0 0 8px rgba(255,255,255,0.7),0 0 0 2px rgba(15,23,42,0.9);z-index:2;"></div>'
+        f'<div style="position:absolute;bottom:14px;left:{price_pct:.1f}%;transform:{label_transform};font-size:0.6rem;font-weight:700;color:#f1f5f9;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);">&#8377;{price:,.0f}</div>'
+        f'</div>'
+        f'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.58rem;letter-spacing:0.2px;">'
+        f'<span style="color:#f87171;">SL &#8377;{sl:,.0f}</span>'
+        f'<span style="color:#fbbf24;opacity:0.8;">T1 &#8377;{t1:,.0f}</span>'
+        f'<span style="color:#4ade80;">T2 &#8377;{t2:,.0f}</span>'
+        f'</div></div>'
+    )
+
+
+def _build_candlestick_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
+    """Candlestick + SMA 20/50 + volume chart. Reusable across modes."""
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.72, 0.28], vertical_spacing=0.03)
+    fig.add_trace(go.Candlestick(
+        x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"],
+        name="Price",
+        increasing_line_color="#22c55e", decreasing_line_color="#ef4444",
+        increasing_fillcolor="rgba(34,197,94,0.7)", decreasing_fillcolor="rgba(239,68,68,0.7)",
+    ), row=1, col=1)
+    sma20 = df["Close"].rolling(20).mean()
+    sma50 = df["Close"].rolling(50).mean()
+    fig.add_trace(go.Scatter(x=df.index, y=sma20, name="SMA 20",
+                             line=dict(color="#f59e0b", width=1.5, dash="dot")), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=sma50, name="SMA 50",
+                             line=dict(color="#818cf8", width=1.5)), row=1, col=1)
+    vol_colors = ["#22c55e" if c >= o else "#ef4444"
+                  for c, o in zip(df["Close"], df["Open"])]
+    fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Volume",
+                         marker_color=vol_colors, opacity=0.5, showlegend=False), row=2, col=1)
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#94a3b8")),
+        height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.5)",
+        xaxis_rangeslider_visible=False, margin=dict(t=40, b=10, l=0, r=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
+        font=dict(color="#94a3b8"),
+    )
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)", showgrid=True, row=1, col=1)
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)", showgrid=True, row=2, col=1)
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.05)", showgrid=True)
+    return fig
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODE ROUTING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if app_mode == "🔬 Deep Dive":
+
+    st.markdown("# 🔬 Deep Dive Analyzer")
+    st.caption("Comprehensive single-stock analysis · Data fetched fresh for the selected ticker")
+
+    # ── Ticker selector ───────────────────────────────────────────────────────
+    dd_c1, dd_c2 = st.columns([5, 1])
+    dd_ticker_select = dd_c1.selectbox(
+        "ticker", ALL_TICKERS,
+        format_func=lambda t: t.replace(".NS", ""),
+        label_visibility="collapsed",
+        key="dd_ticker_select",
+    )
+    if dd_c2.button("🔍 Analyse", type="primary", use_container_width=True, key="dd_run_btn"):
+        st.session_state["dd_run"] = dd_ticker_select
+
+    dd_run = st.session_state.get("dd_run")
+    if not dd_run:
+        st.info("👆 Select a stock above and click **Analyse** to run a deep dive.")
+        st.stop()
+
+    # ── Data fetch ────────────────────────────────────────────────────────────
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _dd_load(ticker):
+        _p = fetch_price_data([ticker])
+        _y = fetch_fundamentals([ticker])
+        _s = fetch_screener_data(list(_y.keys()))
+        _f = merge_fundamentals(_y, _s)
+        _n = fetch_nifty_index()
+        return _p, _f, _n
+
+    with st.status(f"📡 Loading {dd_run.replace('.NS', '')}…", expanded=False) as _dds:
+        dd_price_data, dd_fund_data, dd_nifty = _dd_load(dd_run)
+        _dds.update(label="✅ Data loaded", state="complete", expanded=False)
+
+    dd_price_df = dd_price_data.get(dd_run)
+    dd_fund     = dd_fund_data.get(dd_run, {})
+
+    if dd_price_df is None or len(dd_price_df) < 20:
+        st.error(f"Insufficient price data for **{dd_run}**. Check the ticker symbol.")
+        st.stop()
+
+    # ── Score ─────────────────────────────────────────────────────────────────
+    dd_result = score_stock(dd_run, dd_price_df, dd_fund, dd_nifty, use_lynch=True)
+
+    # ── Sentiment (if Ollama running) ─────────────────────────────────────────
+    dd_sent_raw = {}
+    if _ollama_ok:
+        with st.status("🧠 Fetching sentiment…", expanded=False) as _ddsent:
+            dd_sent_raw = fetch_sentiment_batch([dd_run], dd_fund_data)
+            _ddsent.update(label="🧠 Sentiment ready", state="complete", expanded=False)
+        if dd_sent_raw.get(dd_run):
+            dd_result = score_stock(dd_run, dd_price_df, dd_fund, dd_nifty,
+                                    use_lynch=True, sentiment_data=dd_sent_raw.get(dd_run))
+
+    comp   = dd_result["composite"]
+    f_det  = dd_result.get("details", {}).get("fund", {})
+    t_det  = dd_result.get("details", {}).get("tech", {})
+    rs_det = dd_result.get("details", {}).get("rs", {})
+    ei     = dd_result.get("exit", {})
+    sent_d = dd_sent_raw.get(dd_run, {})
+
+    # ── Header row ────────────────────────────────────────────────────────────
+    st.markdown("---")
+    hc1, hc2, hc3, hc4 = st.columns([3, 1, 1, 1])
+    hc1.markdown(f"## {dd_result['name']}")
+    hc1.caption(f"{dd_result.get('sector','—')} · {dd_run.replace('.NS','')}")
+    hc2.metric("Price", f"₹{dd_result.get('current_price', 0):,.2f}")
+    hc3.metric("Funnel", dd_result["funnel"].title())
+    fn_color = {"large": "#3b82f6", "mid": "#a855f7", "small": "#f97316"}.get(dd_result["funnel"], "#6b7280")
+    qc_count = len(f_det.get("quality_checks", []))
+    hc4.metric("Quality Gate", f"{qc_count}/10 checks",
+               "✅ Pass" if f_det.get("passes_quality_gate") else "❌ Fail")
+
+    st.markdown("---")
+
+    # ── Gauge + sub-scores ────────────────────────────────────────────────────
+    g_col, s_col = st.columns([1, 2])
+
+    with g_col:
+        g_color = "#22c55e" if comp >= 65 else ("#f59e0b" if comp >= 50 else "#ef4444")
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=comp,
+            number={"font": {"size": 52, "color": g_color}},
+            title={"text": "Composite Score", "font": {"size": 13, "color": "#64748b"}},
+            gauge={
+                "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#334155",
+                         "tickvals": [0, 25, 50, 65, 75, 100]},
+                "bar": {"color": g_color, "thickness": 0.28},
+                "bgcolor": "rgba(0,0,0,0)",
+                "borderwidth": 0,
+                "steps": [
+                    {"range": [0,  50], "color": "rgba(239,68,68,0.08)"},
+                    {"range": [50, 65], "color": "rgba(245,158,11,0.08)"},
+                    {"range": [65,100], "color": "rgba(34,197,94,0.08)"},
+                ],
+                "threshold": {"line": {"color": g_color, "width": 3},
+                              "thickness": 0.8, "value": comp},
+            },
+        ))
+        fig_gauge.update_layout(
+            height=270, margin=dict(t=30, b=0, l=20, r=20),
+            paper_bgcolor="rgba(0,0,0,0)", font_color="#f1f5f9",
+        )
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
+    with s_col:
+        sm1, sm2 = st.columns(2)
+        sm3, sm4 = st.columns(2)
+        sm1.metric("📊 Technical",    f"{dd_result['technical']:.0f} / 100")
+        sm2.metric("📋 Fundamental",  f"{dd_result['fundamental']:.0f} / 100")
+        sm3.metric("🏛️ Institutional", f"{dd_result['institutional']:.0f} / 100")
+        sm4.metric("🛡️ Risk",          f"{dd_result['risk']:.0f} / 100")
+        rs_val  = dd_result.get("relative_str", 50)
+        rs_3m   = rs_det.get("rs_3m")
+        rs_12m  = rs_det.get("rs_12m")
+        rs_delta = (f"3M {rs_3m:+.1f}% / 12M {rs_12m:+.1f}%" if rs_3m is not None and rs_12m is not None
+                    else (f"3M {rs_3m:+.1f}%" if rs_3m is not None else None))
+        st.metric("🚀 Relative Strength", f"{rs_val:.0f} / 100", rs_delta)
+
+    st.markdown("---")
+
+    # ── Price chart ───────────────────────────────────────────────────────────
+    st.markdown("#### 📈 Price Chart")
+    chart_df = dd_price_df.tail(126)  # last ~6 months
+    st.plotly_chart(_build_candlestick_chart(chart_df, dd_result["name"]),
+                    use_container_width=True)
+
+    st.markdown("---")
+
+    # ── Fundamentals + Quality Gate ───────────────────────────────────────────
+    st.markdown("#### 📋 Fundamentals & Quality Gate")
+    fq1, fq2 = st.columns(2)
+
+    with fq1:
+        st.markdown("**Key Metrics**")
+        _metrics = [
+            ("P/E Ratio",        f_det.get("pe"),              None),
+            ("PEG Ratio",        f_det.get("peg_ratio"),       None),
+            ("ROCE",             f_det.get("roce"),            "%"),
+            ("ROE",              f_det.get("roe"),             "%"),
+            ("Debt / Equity",    f_det.get("debt_equity"),     None),
+            ("Interest Coverage",f_det.get("interest_coverage"),"x"),
+            ("Sales Growth 5Y",  f_det.get("sales_growth_5y"), "%"),
+            ("Profit Growth 5Y", f_det.get("profit_growth_5y"),"%"),
+            ("Promoter Holding", f_det.get("promoter_holding"),"%"),
+            ("Pledged %",        f_det.get("pledged_pct"),     "%"),
+            ("Lynch Ratio",      f_det.get("lynch_ratio"),     None),
+        ]
+        _rows = ""
+        for _lbl, _val, _unit in _metrics:
+            _disp = (f"{_val:.1f}{_unit}" if _unit else f"{_val:.2f}") if _val is not None else "—"
+            _rows += (
+                f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
+                f'border-bottom:1px solid rgba(255,255,255,0.05);">'
+                f'<span style="color:#94a3b8;font-size:0.83rem;">{_lbl}</span>'
+                f'<span style="font-weight:600;font-size:0.83rem;">{_disp}</span></div>'
+            )
+        st.markdown(
+            f'<div style="background:rgba(15,23,42,0.55);border:1px solid rgba(255,255,255,0.07);'
+            f'border-radius:12px;padding:12px 16px;">{_rows}</div>',
+            unsafe_allow_html=True,
+        )
+
+    with fq2:
+        st.markdown("**Quality Gate**")
+        _passed = set(f_det.get("quality_checks", []))
+        _all_checks = ["ROCE≥18%", "ROE≥15%", "D/E≤0.5", "Sales5Y≥12%", "Profit5Y≥15%",
+                       "Promoter≥50%", "ZeroPledge", "ICR≥5", "PEG<1.5", "PE<Industry"]
+        if dd_result.get("funnel") == "large":
+            _all_checks.append("Lynch<1")
+        _gate_rows = ""
+        for _chk in _all_checks:
+            _ok  = _chk in _passed
+            _ico = "✅" if _ok else "❌"
+            _clr = "#4ade80" if _ok else "#f87171"
+            _bg  = "rgba(34,197,94,0.07)" if _ok else "rgba(239,68,68,0.07)"
+            _gate_rows += (
+                f'<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;'
+                f'margin-bottom:3px;border-radius:7px;background:{_bg};">'
+                f'<span>{_ico}</span>'
+                f'<span style="font-size:0.81rem;color:{_clr};">{_chk}</span></div>'
+            )
+        _passes   = f_det.get("passes_quality_gate", False)
+        _tot      = len(_all_checks)
+        _summary  = (
+            f'<div style="margin-bottom:8px;padding:8px 12px;border-radius:8px;text-align:center;'
+            f'background:{"rgba(34,197,94,0.15)" if _passes else "rgba(239,68,68,0.15)"};'
+            f'color:{"#4ade80" if _passes else "#f87171"};font-weight:700;font-size:0.88rem;">'
+            f'{"✅ PASSES" if _passes else "❌ FAILS"} Quality Gate · {len(_passed)}/{_tot} checks</div>'
+        )
+        st.markdown(
+            f'<div style="background:rgba(15,23,42,0.55);border:1px solid rgba(255,255,255,0.07);'
+            f'border-radius:12px;padding:12px;">{_summary}{_gate_rows}</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
+
+    # ── Sentiment ─────────────────────────────────────────────────────────────
+    if sent_d:
+        st.markdown("#### 🧠 Sentiment Analysis (Ollama)")
+        _summary_txt   = sent_d.get("summary", "")
+        _catalysts     = sent_d.get("key_catalysts", [])
+        _risks         = sent_d.get("key_risks", [])
+        if _summary_txt:
+            st.info(f"📰 **Summary:** {_summary_txt}")
+        _sc1, _sc2 = st.columns(2)
+        with _sc1:
+            if _catalysts:
+                st.success("**Key Catalysts**\n\n" + "\n".join(f"• {c}" for c in _catalysts))
+        with _sc2:
+            if _risks:
+                st.warning("**Key Risks**\n\n" + "\n".join(f"• {r}" for r in _risks))
+        st.markdown("---")
+    elif _ollama_ok:
+        st.caption("🧠 No sentiment data cached for this ticker.")
+        st.markdown("---")
+
+    # ── Exit Strategy ─────────────────────────────────────────────────────────
+    st.markdown("#### 🎯 Exit Strategy")
+    ec1, ec2, ec3, ec4, ec5 = st.columns(5)
+    ec1.metric("Entry",     f"₹{ei.get('entry_price',  0):,.2f}")
+    ec2.metric("Stop Loss", f"₹{ei.get('stop_loss',    0):,.2f}", f"-{ei.get('stop_loss_pct', 0):.1f}%")
+    ec3.metric("Target 1",  f"₹{ei.get('target_1',     0):,.2f}", f"+{ei.get('target_1_pct', 0):.1f}%")
+    ec4.metric("Target 2",  f"₹{ei.get('target_2',     0):,.2f}", f"+{ei.get('target_2_pct', 0):.1f}%")
+    ec5.metric("R:R",       f"{ei.get('risk_reward',   0):.1f}x")
+    st.markdown(_price_spectrum_bar(ei, dd_result.get("current_price", 0)), unsafe_allow_html=True)
+    st.caption(f"⏱️ Hold: {ei.get('hold_days_min','?')}–{ei.get('hold_days_max','?')} days · {ei.get('hold_label','')}")
+
+    st.markdown("---")
+    st.caption(f"🔬 Deep Dive · {dd_result['name']} · {datetime.now().strftime('%Y-%m-%d %H:%M')} · Not financial advice")
+    st.stop()  # ← halt here; Portfolio Engine code below will not execute
+
+
+# ── Header (Portfolio Engine) ─────────────────────────────────────────────────
 st.markdown(f"# 🎯 {APP_TITLE}")
 st.caption(f"{APP_SUBTITLE} · {datetime.now().strftime('%A, %d %B %Y')}")
 
@@ -419,58 +731,6 @@ if show_market:
 st.markdown("---")
 st.markdown("### 🏆 Your 15-Stock Portfolio")
 st.caption(f"🔵 {ALLOCATION['stocks_per_bucket']['large']} Large Caps (30%) · 🟣 {ALLOCATION['stocks_per_bucket']['mid']} Mid Caps (50%) · 🟠 {ALLOCATION['stocks_per_bucket']['small']} Small Caps (20%)")
-
-def _price_spectrum_bar(ei: dict, current_price: float) -> str:
-    """
-    Returns an HTML string: a red→amber→green gradient bar spanning
-    stop_loss (left) to target_2 (right), with a white dot marking current_price.
-    Returns an empty string when the values are missing or degenerate.
-    """
-    sl   = ei.get("stop_loss",  0) or 0
-    t1   = ei.get("target_1",   0) or 0
-    t2   = ei.get("target_2",   0) or 0
-    price = current_price or 0
-
-    # Need a non-degenerate range to draw anything meaningful
-    span = t2 - sl
-    if span <= 0 or sl <= 0 or t2 <= 0:
-        return ""
-
-    # Percentage positions along the bar (0–100), clamped
-    t1_pct    = max(0, min(100, (t1    - sl) / span * 100))
-    price_pct = max(0, min(100, (price - sl) / span * 100))
-
-    # Gradient: red at 0% → amber at T1 position → green at 100%
-    gradient = (
-        f"linear-gradient(to right, "
-        f"#ef4444 0%, "
-        f"#f59e0b {t1_pct:.1f}%, "
-        f"#22c55e 100%)"
-    )
-
-    # Price label: show above the dot, flipped to stay inside bar edges
-    label_align = "right" if price_pct > 85 else ("left" if price_pct < 15 else "center")
-    label_transform = {
-        "right":  "translateX(-100%)",
-        "left":   "translateX(0%)",
-        "center": "translateX(-50%)",
-    }[label_align]
-
-    return (
-        f'<div style="margin:12px 0 4px;padding:0 2px;">'
-        f'<div style="position:relative;height:8px;border-radius:6px;background:{gradient};box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);">'
-        f'<div style="position:absolute;top:0;bottom:0;left:{t1_pct:.1f}%;width:1px;background:rgba(255,255,255,0.25);"></div>'
-        f'<div style="position:absolute;top:50%;left:{price_pct:.1f}%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#ffffff;box-shadow:0 0 8px rgba(255,255,255,0.7),0 0 0 2px rgba(15,23,42,0.9);z-index:2;"></div>'
-        f'<div style="position:absolute;bottom:14px;left:{price_pct:.1f}%;transform:{label_transform};font-size:0.6rem;font-weight:700;color:#f1f5f9;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);">&#8377;{price:,.0f}</div>'
-        f'</div>'
-        f'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.58rem;letter-spacing:0.2px;">'
-        f'<span style="color:#f87171;">SL &#8377;{sl:,.0f}</span>'
-        f'<span style="color:#fbbf24;opacity:0.8;">T1 &#8377;{t1:,.0f}</span>'
-        f'<span style="color:#4ade80;">T2 &#8377;{t2:,.0f}</span>'
-        f'</div>'
-        f'</div>'
-    )
-
 
 def render_pick_card(pick, rank_emoji=""):
     s = pick["composite"]
