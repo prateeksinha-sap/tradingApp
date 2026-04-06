@@ -335,8 +335,10 @@ def _price_spectrum_bar(ei: dict, current_price: float) -> str:
     )
 
 
-def _build_candlestick_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
-    """Candlestick + SMA 20/50 + volume chart. Reusable across modes."""
+def _build_candlestick_chart(df: pd.DataFrame, title: str = "", x_range_days: int = 126) -> go.Figure:
+    """Candlestick + SMA 20/50/200 + volume chart. Reusable across modes.
+    df should be the FULL price history so rolling(200) has enough data.
+    x_range_days controls the visible window (default 126 ≈ 6 months)."""
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                         row_heights=[0.72, 0.28], vertical_spacing=0.03)
     fig.add_trace(go.Candlestick(
@@ -361,6 +363,7 @@ def _build_candlestick_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
     fig.update_layout(
         height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.5)",
         xaxis_rangeslider_visible=False, margin=dict(t=16, b=10, l=0, r=0),
+        xaxis_range=[df.index[-min(x_range_days, len(df))], df.index[-1]],
         legend=dict(
             orientation="h", xanchor="left", x=0.01,
             yanchor="top",   y=0.99,
@@ -505,8 +508,10 @@ if app_mode == "🔬 Deep Dive":
 
     # ── Price chart ───────────────────────────────────────────────────────────
     st.markdown("#### 📈 Price Chart")
-    chart_df = dd_price_df.tail(126)  # last ~6 months
-    st.plotly_chart(_build_candlestick_chart(chart_df), use_container_width=True)
+    # Pass the full history so rolling(200) has enough bars to compute SMA 200.
+    # x_range_days limits the *visible* window to ~6 months without slicing the data.
+    st.plotly_chart(_build_candlestick_chart(dd_price_df, x_range_days=126),
+                    use_container_width=True)
 
     st.markdown("---")
 
