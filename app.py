@@ -356,10 +356,15 @@ def _build_candlestick_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
     fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Volume",
                          marker_color=vol_colors, opacity=0.5, showlegend=False), row=2, col=1)
     fig.update_layout(
-        title=dict(text=title, font=dict(size=14, color="#94a3b8")),
         height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.5)",
-        xaxis_rangeslider_visible=False, margin=dict(t=40, b=10, l=0, r=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, bgcolor="rgba(0,0,0,0)"),
+        xaxis_rangeslider_visible=False, margin=dict(t=16, b=10, l=0, r=0),
+        legend=dict(
+            orientation="h", xanchor="left", x=0.01,
+            yanchor="top",   y=0.99,
+            bgcolor="rgba(15,23,42,0.75)",
+            bordercolor="rgba(255,255,255,0.08)", borderwidth=1,
+            font=dict(size=11),
+        ),
         font=dict(color="#94a3b8"),
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)", showgrid=True, row=1, col=1)
@@ -498,8 +503,7 @@ if app_mode == "🔬 Deep Dive":
     # ── Price chart ───────────────────────────────────────────────────────────
     st.markdown("#### 📈 Price Chart")
     chart_df = dd_price_df.tail(126)  # last ~6 months
-    st.plotly_chart(_build_candlestick_chart(chart_df, dd_result["name"]),
-                    use_container_width=True)
+    st.plotly_chart(_build_candlestick_chart(chart_df), use_container_width=True)
 
     st.markdown("---")
 
