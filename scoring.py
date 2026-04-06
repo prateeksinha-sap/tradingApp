@@ -151,10 +151,19 @@ def compute_fundamental_score(fundamentals, funnel="mid", use_lynch=True):
     else: roe_sc = 50
 
     de = fundamentals.get("debt_to_equity")
-    if de is not None:
+    _is_financial = (fundamentals.get("sector") or "").strip() == "Financial Services"
+    if _is_financial:
+        # Banks and NBFCs structurally carry high leverage — D/E is not a
+        # meaningful quality signal for them. Assign a neutral passing score
+        # so they are not penalised vs. the rest of the universe.
+        if de is not None:
+            de = de / 100 if de > 10 else de  # normalise for downstream use
+        de_sc = 75
+    elif de is not None:
         de = de / 100 if de > 10 else de
         de_sc = 95 if de <= 0.3 else (85 if de <= 0.5 else (70 if de <= 0.7 else (45 if de <= 1.5 else 15)))
-    else: de_sc = 50
+    else:
+        de_sc = 50
 
     icr = fundamentals.get("interest_coverage")
     icr_sc = (90 if icr >= 10 else (75 if icr >= 5 else (50 if icr >= 3 else 25))) if icr else 50
@@ -197,7 +206,9 @@ def compute_fundamental_score(fundamentals, funnel="mid", use_lynch=True):
     qc = []
     if roce and roce >= 18: qc.append("ROCE≥18%")
     if roe and ((roe >= 15) or (abs(roe) < 1 and roe * 100 >= 15)): qc.append("ROE≥15%")
-    if de is not None and de <= 0.5: qc.append("D/E≤0.5")
+    # Financial Services stocks pass the D/E check automatically — high leverage
+    # is structural for banks/NBFCs and should not penalise their quality gate.
+    if _is_financial or (de is not None and de <= 0.5): qc.append("D/E≤0.5")
     if sg5 and sg5 >= 12: qc.append("Sales5Y≥12%")
     if pg5 and pg5 >= 15: qc.append("Profit5Y≥15%")
     if prom and prom >= 50: qc.append("Promoter≥50%")
@@ -210,7 +221,11 @@ def compute_fundamental_score(fundamentals, funnel="mid", use_lynch=True):
     # Safety override: if the scraper failed to return critical metrics, force the quality
     # gate to False regardless of how many other checks passed. Without this, a stock with
     # all None fundamentals could still accumulate enough soft checks to slip through.
-    _critical_data_present = roce is not None and prom is not None and de is not None
+    # For Financial Services, D/E being None is acceptable — use only roce + prom.
+    if _is_financial:
+        _critical_data_present = roce is not None and prom is not None
+    else:
+        _critical_data_present = roce is not None and prom is not None and de is not None
     passes_gate = len(qc) >= 6 and _critical_data_present
 
     return {
