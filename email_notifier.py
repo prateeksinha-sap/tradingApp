@@ -60,12 +60,15 @@ def _score_ring(score: float) -> str:
         color = "#f59e0b"
     else:
         color = "#ef4444"
+    # Use a nested table cell for vertical centering — flexbox is stripped by
+    # Gmail and Outlook, making the number fall to the top of the circle.
     return (
-        f'<div style="width:52px;height:52px;border-radius:50%;border:3px solid {color};'
-        f'display:flex;align-items:center;justify-content:center;flex-shrink:0;'
-        f'background:rgba(0,0,0,0.3);float:right;margin-left:12px;">'
-        f'<span style="font-size:15px;font-weight:900;color:{color};">{score:.0f}</span>'
-        f'</div>'
+        f'<table cellpadding="0" cellspacing="0" style="float:right;margin-left:12px;">'
+        f'<tr><td width="52" height="52" align="center" valign="middle"'
+        f' style="width:52px;height:52px;border-radius:50%;border:3px solid {color};'
+        f'background:rgba(0,0,0,0.3);text-align:center;vertical-align:middle;">'
+        f'<span style="font-size:15px;font-weight:900;color:{color};line-height:1;">{score:.0f}</span>'
+        f'</td></tr></table>'
     )
 
 
