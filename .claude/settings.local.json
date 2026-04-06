@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv venv)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(venv/Scripts/streamlit run:*)",
+      "Bash(taskkill /F /IM streamlit.exe)",
+      "Bash(taskkill /F /IM python.exe /FI \"WINDOWTITLE eq streamlit*\")",
+      "Bash(start \"NiftyScout\" venv/Scripts/streamlit run app.py --server.headless true)",
+      "Bash(start \"\" venv/Scripts/streamlit.exe run app.py --server.headless true)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8501)",
+      "Bash(venv/Scripts/python -c \"import feedparser; print\\(''feedparser ok''\\)\")",
+      "Bash(gh auth:*)",
+      "Bash(gh --version)"
+    ]
+  }
+}
