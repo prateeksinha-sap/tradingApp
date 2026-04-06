@@ -130,6 +130,48 @@ FUND_CONFIG = {
     "debt_equity_max": 1.5, "min_market_cap_cr": 5000, "nifty_pe_avg": 22,
 }
 
+# ── Sector ROCE benchmarks ────────────────────────────────────────────────────
+# ROCE thresholds differ widely by capital intensity. Using one universal bar
+# (e.g. ROCE >= 25 = excellent) unfairly penalises asset-heavy sectors like
+# Infrastructure, Metals, and Utilities whose asset bases structurally compress
+# ROCE even when the business is healthy.
+#
+# These values represent the ROCE level considered "excellent" for each sector
+# (i.e., a company at or above this threshold scores ~95). Scoring scales
+# proportionally downward from there.
+#
+# TODO: Replace these hardcoded benchmarks with dynamically scraped industry-
+# average ROCE data. Screener.in does not expose industry-average ROCE on
+# individual company pages — it would require scraping sector/screen pages
+# (e.g. screener.in/screens/<sector-id>/) to aggregate peer ROCEs, then
+# joining back to each stock. This is a separate, non-trivial pipeline.
+# A more robust alternative would be to use NSE/BSE sector index factsheets
+# or a paid data provider (e.g. Tijori Finance, Trendlyne) that exposes
+# sector-level aggregates via API.
+SECTOR_ROCE_BENCHMARKS = {
+    # Capital-intensive / cyclical — lower absolute ROCE is normal
+    "Infrastructure":          12.0,
+    "Metals & Mining":         14.0,
+    "Oil & Gas":               14.0,
+    "Utilities":               12.0,
+    "Power":                   12.0,
+    "Construction":            13.0,
+    "Chemicals":               16.0,
+    "Cement & Construction":   14.0,
+    # Asset-light / high-margin — higher ROCE is the norm
+    "Technology":              28.0,
+    "Information Technology":  28.0,
+    "Consumer Goods":          24.0,
+    "FMCG":                    28.0,
+    "Pharma":                  20.0,
+    "Healthcare":              20.0,
+    "Automobiles":             18.0,
+    "Auto Components":         16.0,
+    "Retail":                  20.0,
+    "Textiles":                14.0,
+    # Default for unlisted / unknown sectors (falls back to absolute logic)
+}
+
 RISK_CONFIG = {
     "max_beta": 1.8, "ideal_beta": (0.7, 1.3),
     "max_drawdown_pct": 30, "volatility_window": 20,

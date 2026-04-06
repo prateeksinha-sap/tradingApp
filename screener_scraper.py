@@ -116,6 +116,14 @@ def scrape_screener_data(ticker: str) -> dict:
                 result["peg_ratio"] = _parse_number(val)
             elif "industry pe" in name or "sector pe" in name:
                 result["industry_pe"] = _parse_number(val)
+                # TODO: Screener.in does not expose "Industry Average ROCE" on the
+                # individual company page — only the company's own ROCE is shown.
+                # To score ROCE relative to industry peers, we would need to scrape
+                # the corresponding sector screen page (screener.in/screens/<id>/)
+                # and aggregate the ROCE column across all companies in that sector.
+                # That requires a separate, non-trivial pipeline (pagination, sector
+                # ID mapping, caching). Until implemented, scoring.py falls back to
+                # the SECTOR_ROCE_BENCHMARKS config dict as an approximation.
 
         # ── Parse from the main data tables ──────────────────────────────
         # Look for ROCE, sales/profit growth in data rows

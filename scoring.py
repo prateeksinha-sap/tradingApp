@@ -10,7 +10,7 @@ from config import (
     WEIGHTS_LARGE, WEIGHTS_MID, WEIGHTS_SMALL,
     FUND_WEIGHTS_LARGE, FUND_WEIGHTS_MID, FUND_WEIGHTS_SMALL,
     LARGE_CAP_TICKERS, MID_CAP_TICKERS, SMALL_CAP_TICKERS,
-    PORTFOLIO_CONFIG,
+    PORTFOLIO_CONFIG, SECTOR_ROCE_BENCHMARKS,
 )
 
 def _clamp(val, lo=0, hi=100):
@@ -159,7 +159,28 @@ def compute_fundamental_score(fundamentals, funnel="mid", use_lynch=True):
     peg_sc = (95 if peg < 0.8 else (85 if peg < 1.0 else (65 if peg < 1.5 else (40 if peg < 2.0 else 15)))) if (peg and peg > 0) else 50
 
     roce = fundamentals.get("roce")
-    roce_sc = (95 if roce >= 25 else (80 if roce >= 18 else (55 if roce >= 12 else 25))) if roce else 50
+    sector = (fundamentals.get("sector") or "").strip()
+    _roce_benchmark = SECTOR_ROCE_BENCHMARKS.get(sector)  # None → use absolute fallback
+    # TODO: Replace SECTOR_ROCE_BENCHMARKS with dynamically scraped industry-average
+    # ROCE values from Screener.in sector/screen pages or a structured data provider
+    # (e.g. Trendlyne, Tijori Finance). See SECTOR_ROCE_BENCHMARKS in config.py for
+    # the full architectural note. Dynamic benchmarks would make this scoring truly
+    # relative and self-updating rather than relying on hardcoded sector medians.
+    if roce:
+        if _roce_benchmark:
+            # Relative scoring: evaluate the company vs its sector's typical ROCE.
+            # Analogous to how pe_ratio is scored vs industry PE.
+            roce_ratio = roce / _roce_benchmark
+            roce_sc = (95 if roce_ratio >= 1.3 else
+                       (80 if roce_ratio >= 1.0 else
+                        (60 if roce_ratio >= 0.7 else
+                         (35 if roce_ratio >= 0.5 else 15))))
+        else:
+            # Absolute fallback for sectors not in the benchmark dict (e.g. IT, FMCG
+            # where the existing 25% bar is already a fair universal standard).
+            roce_sc = 95 if roce >= 25 else (80 if roce >= 18 else (55 if roce >= 12 else 25))
+    else:
+        roce_sc = 50
 
     roe = fundamentals.get("roe")
     if roe:
