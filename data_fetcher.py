@@ -6,6 +6,7 @@ Downloads price data via yfinance, caches in SQLite.
 import sqlite3
 import json
 import time
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -14,12 +15,65 @@ import yfinance as yf
 
 from config import NIFTY_50_TICKERS, TECH_CONFIG, CACHE_CONFIG
 
+logger = logging.getLogger(__name__)
+
+_RETRY_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 2  # seconds; actual delay = base * 2^attempt
+
+
+def _yf_history_with_retry(ticker_obj, **kwargs):
+    """
+    Call ticker_obj.history(**kwargs) with exponential backoff.
+    Retries on any exception or on an empty result.
+    Returns a DataFrame (possibly empty) after all attempts.
+    """
+    last_exc = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            df = ticker_obj.history(**kwargs)
+            if df is not None and len(df) > 0:
+                return df
+            # Empty result — treat as a soft failure and retry
+            last_exc = None
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("history() attempt %d/%d failed for %s: %s",
+                           attempt + 1, _RETRY_ATTEMPTS, ticker_obj.ticker, exc)
+        if attempt < _RETRY_ATTEMPTS - 1:
+            time.sleep(_RETRY_BASE_DELAY * (2 ** attempt))
+    if last_exc:
+        raise last_exc
+    return pd.DataFrame()
+
+
+def _yf_info_with_retry(ticker_obj):
+    """
+    Call ticker_obj.info with exponential backoff.
+    Returns a dict (possibly empty) after all attempts.
+    """
+    last_exc = None
+    for attempt in range(_RETRY_ATTEMPTS):
+        try:
+            info = ticker_obj.info
+            if info:
+                return info
+            last_exc = None
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("info attempt %d/%d failed for %s: %s",
+                           attempt + 1, _RETRY_ATTEMPTS, ticker_obj.ticker, exc)
+        if attempt < _RETRY_ATTEMPTS - 1:
+            time.sleep(_RETRY_BASE_DELAY * (2 ** attempt))
+    if last_exc:
+        raise last_exc
+    return {}
+
 
 def _get_db():
     """Get SQLite connection, create tables if needed."""
     db_path = Path(CACHE_CONFIG["db_path"])
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=15)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS price_cache (
             ticker TEXT PRIMARY KEY,
@@ -92,8 +146,11 @@ def fetch_price_data(tickers: list[str] = None, progress_callback=None) -> dict[
                 progress_callback(i / total, f"Fetching {ticker.replace('.NS', '')} ({i+1}/{total})")
             try:
                 stock = yf.Ticker(ticker)
-                df = stock.history(start=start_date.strftime("%Y-%m-%d"),
-                                   end=end_date.strftime("%Y-%m-%d"))
+                df = _yf_history_with_retry(
+                    stock,
+                    start=start_date.strftime("%Y-%m-%d"),
+                    end=end_date.strftime("%Y-%m-%d"),
+                )
                 if df is not None and len(df) > 20:
                     # Clean columns
                     df = df[["Open", "High", "Low", "Close", "Volume"]]
@@ -143,7 +200,7 @@ def fetch_fundamentals(tickers: list[str] = None, progress_callback=None) -> dic
                 progress_callback(i / total, f"Fundamentals: {ticker.replace('.NS', '')} ({i+1}/{total})")
             try:
                 stock = yf.Ticker(ticker)
-                info = stock.info or {}
+                info = _yf_info_with_retry(stock) or {}
 
                 fundamentals = {
                     "pe_trailing":      info.get("trailingPE"),
@@ -185,7 +242,7 @@ def fetch_nifty_index() -> pd.DataFrame:
     Uses fast_info for the latest price to avoid yfinance history() lag."""
     try:
         nifty = yf.Ticker("^NSEI")
-        df = nifty.history(period="3mo")
+        df = _yf_history_with_retry(nifty, period="3mo")
         df = df[["Open", "High", "Low", "Close", "Volume"]]
 
         # Patch: yfinance history() sometimes lags by a day for Indian indices.
@@ -239,7 +296,7 @@ def fetch_india_vix() -> pd.DataFrame:
     """Fetch India VIX for market fear gauge."""
     try:
         vix = yf.Ticker("^INDIAVIX")
-        df = vix.history(period="1mo")
+        df = _yf_history_with_retry(vix, period="1mo")
         result = df[["Close"]]
 
         # Same patch: try to get latest VIX from info

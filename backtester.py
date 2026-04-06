@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 
-from config import BACKTEST_CONFIG, WEIGHTS_BY_TIER, ALLOCATION
-from scoring import compute_technical_score, compute_fundamental_score, compute_risk_score, _get_tier
+from config import BACKTEST_CONFIG, ALLOCATION
+from scoring import compute_technical_score, _get_tier
 
 
 def run_backtest(price_data, fundamentals, nifty_df_for_rs=None,
@@ -77,12 +77,11 @@ def run_backtest(price_data, fundamentals, nifty_df_for_rs=None,
             if len(hist) < 50: continue
             try:
                 tier = _get_tier(ticker)
-                w = WEIGHTS_BY_TIER.get(tier, WEIGHTS_BY_TIER["mid"])
                 tech = compute_technical_score(hist)
-                fund = compute_fundamental_score(fundamentals.get(ticker, {}), tier)
-                risk = compute_risk_score(hist, fundamentals.get(ticker, {}))
-                comp = (tech["technical"] * w["technical"] + fund["fundamental"] * w["fundamental"] +
-                        50 * w["institutional"] + risk["risk"] * w["risk"])
+                # Fundamentals and Institutional flows are excluded from the backtest to
+                # prevent lookahead bias — scraped fundamental data reflects today's values,
+                # not the historical values at the time of each rebalance date.
+                comp = tech["technical"] * 0.5 + tech.get("relative_str", 50) * 0.5
                 scores.append({"ticker": ticker, "tier": tier, "composite": comp, "price": hist["Close"].iloc[-1]})
             except Exception: continue
 

@@ -37,7 +37,7 @@ def _ticker_to_screener(ticker: str) -> str:
 def _get_db():
     db_path = Path(CACHE_CONFIG["db_path"])
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=15)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS screener_cache (
             ticker TEXT PRIMARY KEY,

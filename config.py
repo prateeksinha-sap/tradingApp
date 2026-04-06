@@ -4,6 +4,13 @@ Three-funnel architecture: Large Cap / Mid Cap / Small Cap
 Designed for 10-year alpha generation over Nifty 50.
 """
 
+# Load .env into environment variables (no-op if python-dotenv not installed or file missing)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=False)  # override=False: real env vars always win over .env
+except ImportError:
+    pass
+
 # ── Large Caps (Nifty 50) — The Anchors ──────────────────────────────────────
 LARGE_CAP_TICKERS = [
     "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
@@ -48,6 +55,15 @@ SMALL_CAP_TICKERS = [
 
 ALL_TICKERS = list(dict.fromkeys(LARGE_CAP_TICKERS + MID_CAP_TICKERS + SMALL_CAP_TICKERS))
 NIFTY_50_TICKERS = LARGE_CAP_TICKERS  # Backward compat
+
+# ── PSU Tickers — excluded by default, opt-in via sidebar toggle ─────────────
+PSU_TICKERS = [
+    "ONGC.NS", "NTPC.NS", "POWERGRID.NS", "COALINDIA.NS", "BPCL.NS",
+    "SBIN.NS", "BANKBARODA.NS", "CANBK.NS", "HAL.NS", "IOC.NS",
+    "IRCTC.NS", "IRFC.NS", "NHPC.NS", "PFC.NS", "PNB.NS",
+    "RECLTD.NS", "SAIL.NS", "BEL.NS", "OIL.NS", "GAIL.NS",
+    "CONCOR.NS", "BHEL.NS", "HUDCO.NS", "MAZDOCK.NS",
+]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ALLOCATION — 30 / 50 / 20 with drift bands
@@ -144,7 +160,10 @@ BACKTEST_CONFIG = {
 # ═══════════════════════════════════════════════════════════════════════════════
 EMAIL_CONFIG = {
     "smtp_server": "smtp.gmail.com", "smtp_port": 587,
-    "sender_email": "prateek.sinha.mail@gmail.com", "sender_password": ""  # Add your Gmail App Password here,
+    # Credentials are loaded from .env (NIFTYSCOUT_EMAIL / NIFTYSCOUT_EMAIL_PASSWORD)
+    # or .streamlit/secrets.toml — never hardcode them here.
+    "sender_email": "",
+    "sender_password": "",
     "recipients": [], "auto_send_after_analysis": True,
 }
 NGROK_CONFIG = {"auth_token": "", "enabled": False}

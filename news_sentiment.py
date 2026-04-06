@@ -58,7 +58,7 @@ _UNAVAILABLE = {
 # ── SQLite helpers ────────────────────────────────────────────────────────────
 
 def _db():
-    conn = sqlite3.connect(CACHE_CONFIG["db_path"])
+    conn = sqlite3.connect(CACHE_CONFIG["db_path"], check_same_thread=False, timeout=15)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sentiment_cache (
             ticker        TEXT PRIMARY KEY,

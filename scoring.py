@@ -207,6 +207,12 @@ def compute_fundamental_score(fundamentals, funnel="mid", use_lynch=True):
     if pe_ratio and pe_ratio < 1.0: qc.append("PE<Industry")
     if funnel == "large" and lynch_ratio is not None and lynch_ratio < 1.0: qc.append("Lynch<1")
 
+    # Safety override: if the scraper failed to return critical metrics, force the quality
+    # gate to False regardless of how many other checks passed. Without this, a stock with
+    # all None fundamentals could still accumulate enough soft checks to slip through.
+    _critical_data_present = roce is not None and prom is not None and de is not None
+    passes_gate = len(qc) >= 6 and _critical_data_present
+
     return {
         "fundamental": round(_clamp(fundamental), 1),
         "pe": pe, "pe_vs_market": round(pe_ratio, 2) if pe_ratio else None,
@@ -224,7 +230,7 @@ def compute_fundamental_score(fundamentals, funnel="mid", use_lynch=True):
         "profit_growth_5y": pg5, "pg5_score": round(pg5_sc, 1),
         "promoter_holding": prom, "promoter_score": round(prom_sc, 1),
         "pledged_pct": plg, "pledge_score": round(plg_sc, 1),
-        "quality_checks": qc, "passes_quality_gate": len(qc) >= 6,
+        "quality_checks": qc, "passes_quality_gate": passes_gate,
         "earnings_growth": fundamentals.get("earnings_growth"), "growth_score": round(pg5_sc, 1),
     }
 
@@ -295,7 +301,7 @@ def compute_risk_score(df, fundamentals):
 # ═══════════════════════════════════════════════════════════════════════════════
 # EXIT & HOLD (NaN-safe)
 # ═══════════════════════════════════════════════════════════════════════════════
-def compute_exit_and_hold(df, fundamentals, tech_details):
+def compute_exit_and_hold(df, fundamentals, tech_details, funnel="mid"):
     empty = {"entry_price": None, "stop_loss": None, "target_1": None, "target_2": None,
              "risk_reward": None, "stop_loss_pct": 0, "target_1_pct": 0, "target_2_pct": 0,
              "hold_days_min": None, "hold_days_max": None, "hold_label": None}
@@ -305,7 +311,8 @@ def compute_exit_and_hold(df, fundamentals, tech_details):
         if pd.isna(cur) or cur <= 0: return empty
         atr_s = ta.atr(high, low, close, length=14)
         atr = atr_s.iloc[-1] if atr_s is not None and len(atr_s) > 0 and not pd.isna(atr_s.iloc[-1]) else cur * 0.02
-        sl = max(low.tail(20).min() - 0.5 * atr, cur - 2 * atr, cur * 0.92)
+        sl_cap = cur * 0.92 if funnel == "large" else (cur * 0.88 if funnel == "mid" else cur * 0.85)
+        sl = max(low.tail(20).min() - 0.5 * atr, cur - 2 * atr, sl_cap)
         h52 = fundamentals.get("52w_high") or high.tail(252).max()
         risk = cur - sl
         if risk <= 0: risk = cur * 0.05
@@ -353,8 +360,10 @@ def score_stock(ticker, price_df, fundamentals, nifty_df=None, use_lynch=True, s
     fund = compute_fundamental_score(fundamentals, funnel, use_lynch=use_lynch)
     inst = compute_institutional_score(price_df, fundamentals)
     risk = compute_risk_score(price_df, fundamentals)
-    exit_info = compute_exit_and_hold(price_df, fundamentals, tech)
+    exit_info = compute_exit_and_hold(price_df, fundamentals, tech, funnel=funnel)
     sentiment = compute_sentiment_score(sentiment_data)
+    # Only include sentiment in composite when actual data exists (not just the neutral default)
+    sentiment_weight = w.get("sentiment", 0.0) if sentiment_data else 0.0
 
     rs_score = tech.get("relative_str", 50)
     composite = (
@@ -363,7 +372,7 @@ def score_stock(ticker, price_df, fundamentals, nifty_df=None, use_lynch=True, s
         inst["institutional"] * w.get("institutional", 0.15) +
         risk["risk"] * w.get("risk", 0.15) +
         rs_score * w.get("relative_str", 0.2) +
-        sentiment["sentiment"] * w.get("sentiment", 0.0)
+        sentiment["sentiment"] * sentiment_weight
     )
 
     return {
@@ -372,7 +381,8 @@ def score_stock(ticker, price_df, fundamentals, nifty_df=None, use_lynch=True, s
         "composite": round(composite, 1), "technical": tech["technical"],
         "fundamental": fund["fundamental"], "institutional": inst["institutional"],
         "risk": risk["risk"], "relative_str": rs_score,
-        "sentiment": sentiment["sentiment"],
+        # None when not yet analysed — shows blank in table rather than a misleading 50
+        "sentiment": sentiment["sentiment"] if sentiment_data else None,
         "current_price": round(price_df["Close"].iloc[-1], 2) if price_df is not None and len(price_df) > 0 else None,
         "exit": exit_info,
         "details": {"tech": tech, "fund": fund, "inst": inst, "risk": risk,

@@ -1,159 +1,220 @@
-# 🎯 NiftyScout — Daily Nifty 50 Stock Picker
+# NiftyScout v4 — Alpha Engine
 
-A locally-deployed Python app that analyses all Nifty 50 stocks and suggests the top 3 "no-brainer" picks for the day, based on a composite scoring model.
+A Streamlit dashboard that scores and ranks Indian stocks across three funnels (Large / Mid / Small Cap), generates a 15-stock portfolio with entry, stop-loss, and target levels, and sends a dark-themed HTML email report.
 
-## What It Does
+---
 
-Every time you run it, NiftyScout:
-1. Fetches end-of-day price/volume data for all 50 Nifty stocks (via Yahoo Finance)
-2. Pulls fundamental data (P/E, debt, ROE, growth, beta)
-3. Computes **4 dimension scores** (0–100 each) for every stock
-4. Produces a **weighted composite score** and ranks all 50 stocks
-5. Shows you the **top 3 picks** with detailed breakdowns, charts, and reasoning
+## Features
 
-## Scoring Model
+- **3-funnel scoring** — Large (30%), Mid (50%), Small (20%) with separate weight profiles
+- **6 scoring dimensions** — Technical, Fundamental, Institutional, Risk, Relative Strength, Sentiment
+- **Lynch Ratio (PEGY)** — optional scoring dimension, toggleable in the sidebar
+- **PSU filter** — state-owned enterprises excluded by default, opt-in via sidebar
+- **Ollama sentiment** — local LLM (llama3.2) analyses Indian market RSS news per stock
+- **Dynamic stop losses** — 8% / 12% / 15% caps by funnel
+- **Backtest** — custom date range, equity curve vs Nifty benchmark
+- **Performance tracker** — log positions, monitor target/SL hits
+- **Email report** — dark-themed HTML email with all 15 picks sent to any recipient list
+- **SQLite caching** — price (4 h), fundamentals (7 d), screener (7 d), sentiment (24 h)
 
-| Dimension | Weight | What It Measures |
-|-----------|--------|-----------------|
-| **Technical** (25%) | RSI, MACD, SMA crossover, volume spike | Is the stock trending up with conviction? |
-| **Fundamental** (25%) | P/E ratio, debt/equity, ROE, earnings growth | Is the company financially strong? |
-| **Institutional** (25%) | OBV accumulation, price trend, dividend yield | Are big players buying? |
-| **Risk Safety** (25%) | Beta, volatility, drawdown from 52-week high | How risky is this entry? |
+---
 
-Weights are adjustable via sliders in the sidebar.
+## Requirements
 
-## Setup (Windows)
+- Python 3.10+
+- [Ollama](https://ollama.com) (optional — for news sentiment only)
 
-### 1. Install Python
-Download Python 3.10+ from [python.org](https://python.org). During install, check **"Add Python to PATH"**.
+---
 
-### 2. Clone / Download this project
-Put the `nifty-scout` folder anywhere on your machine.
+## Setup
 
-### 3. Open a terminal in the project folder
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/prateeksinha-sap/tradingApp.git
+cd tradingApp
 ```
-cd C:\path\to\nifty-scout
-```
 
-### 4. Create a virtual environment (recommended)
-```
+### 2. Create and activate a virtual environment
+
+```bash
 python -m venv venv
+
+# Windows
 venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
 ```
 
-### 5. Install dependencies
-```
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 6. Run the app
+### 4. Configure email credentials
+
+Copy the example env file and fill in your Gmail details:
+
+```bash
+# Windows
+copy .env.example .env
+
+# macOS / Linux
+cp .env.example .env
 ```
+
+Edit `.env`:
+
+```
+NIFTYSCOUT_EMAIL=your-gmail@gmail.com
+NIFTYSCOUT_EMAIL_PASSWORD=your-16-char-gmail-app-password
+```
+
+**How to get a Gmail App Password:**
+1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+2. Enable 2-Factor Authentication if you haven't already
+3. Click **Create**, name it "NiftyScout", copy the 16-character code
+4. Paste it as `NIFTYSCOUT_EMAIL_PASSWORD` — your regular Gmail password will not work
+
+> `.env` is listed in `.gitignore` and will never be committed to git.
+
+Credentials are resolved in this order at runtime:
+1. `.streamlit/secrets.toml` — for Streamlit Cloud deployment
+2. `.env` / environment variables — for local development
+3. `EMAIL_CONFIG` in `config.py` — intentionally left blank
+
+### 5. (Optional) Set up Ollama for news sentiment
+
+Install Ollama from [ollama.com](https://ollama.com), then pull the model:
+
+```bash
+ollama pull llama3.2
+```
+
+Ollama must be running when you start the app. The `start.bat` script handles this automatically on Windows. On macOS / Linux, run `ollama serve` in a separate terminal before launching Streamlit.
+
+### 6. Run the app
+
+**Windows** — double-click `start.bat`, or from a terminal:
+
+```
+start.bat
+```
+
+**macOS / Linux:**
+
+```bash
 streamlit run app.py
 ```
 
-Your browser will open at `http://localhost:8501` with the dashboard.
+The dashboard opens at `http://localhost:8501`.
 
-## Daily Usage
+---
 
-Just run `streamlit run app.py` each day after market close (3:30 PM IST).
-The app caches data to avoid redundant API calls.
+## Streamlit Cloud Deployment
 
-Click **"Clear Cache & Refresh"** in the sidebar to force a fresh data pull.
+1. Push your repo to GitHub (`.env` and `.streamlit/secrets.toml` are git-ignored and never committed).
+2. Go to [share.streamlit.io](https://share.streamlit.io) and connect your repo.
+3. In the app settings, open **Secrets** and add:
+
+```toml
+[email]
+sender_email = "your-gmail@gmail.com"
+sender_password = "your-16-char-app-password"
+```
+
+> Ollama sentiment will show as offline on Streamlit Cloud (it requires a local process). All other features work normally.
+
+---
 
 ## Project Structure
 
 ```
-nifty-scout/
-├── app.py              # Streamlit dashboard (main entry point)
-├── config.py           # All settings, tickers, weights, thresholds
-├── data_fetcher.py     # Yahoo Finance data download + SQLite caching
-├── scoring.py          # The 4-dimension scoring engine
-├── email_notifier.py   # HTML email builder + Gmail SMTP sender
-├── tunnel.py           # ngrok tunnel manager for mobile access
-├── requirements.txt    # Python dependencies
-├── data/               # SQLite cache (auto-created)
-│   └── niftyscout.db
-└── README.md
+tradingApp/
+├── app.py                  # Streamlit dashboard — main entry point
+├── config.py               # All configuration constants and weights
+├── scoring.py              # Core alpha engine — all scoring logic
+├── data_fetcher.py         # yfinance price + fundamental data with retry/cache
+├── screener_scraper.py     # Screener.in scraper (ROCE, promoter holding, PEG, etc.)
+├── news_sentiment.py       # Ollama + RSS sentiment pipeline
+├── email_notifier.py       # Dark-themed HTML email builder and sender
+├── backtester.py           # Backtester with date range and Nifty benchmark
+├── performance_tracker.py  # Position tracker — targets, stop-loss, P&L log
+├── position_sizer.py       # Capital allocation and market regime detection
+├── tunnel.py               # ngrok tunnel for mobile access
+├── start.bat               # Windows launcher (starts Ollama + Streamlit)
+├── requirements.txt        # Python dependencies
+├── .env.example            # Credential template — copy to .env and fill in
+└── data/                   # SQLite cache (auto-created, git-ignored)
 ```
 
-## 📧 Email Setup (Gmail)
+---
 
-NiftyScout can email today's top picks to up to 3 people automatically.
+## Sidebar Controls
 
-### Step 1: Create a Gmail App Password
-1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-2. You may need to enable 2-Factor Authentication first
-3. Select **Mail** → **Windows Computer** → **Generate**
-4. Copy the 16-character password (e.g., `abcd efgh ijkl mnop`)
+| Control | Description |
+|---|---|
+| Show market overview | Nifty / VIX / market breadth panel |
+| Include Lynch Ratio | PEGY weighted in Large Cap fundamental score (~6.5% of fundamental sub-score) |
+| Include PSUs | Add state-owned enterprises to the universe (excluded by default) |
+| Sentiment (Ollama) | Adds a 5% sentiment dimension; auto-runs on the 15 picks after scoring |
+| Full Scan | Run sentiment across all ~160 stocks |
+| Clear Cache & Refresh | Force re-fetch of all price and fundamental data |
+| Mobile tunnel | Start an ngrok tunnel for access from your phone |
+| Email Report | Add recipients and send the dark-themed HTML report |
 
-### Step 2: Configure in `config.py`
-```python
-EMAIL_CONFIG = {
-    "sender_email":  "you@gmail.com",
-    "sender_password": "abcd efgh ijkl mnop",  # App Password, NOT your Gmail password
-    "recipients": [
-        "friend1@example.com",
-        "friend2@example.com",
-        "friend3@example.com",
-    ],
-    "auto_send_after_analysis": True,  # Sends automatically when app loads
-}
-```
+---
 
-### How It Works
-- **Auto-send**: When `auto_send_after_analysis` is `True`, an email is sent once per session when the analysis completes
-- **Manual send**: Click **"📤 Send Email Now"** in the sidebar anytime
-- The email is a polished HTML with score bars, signals, and a link to the dashboard
+## Scoring Architecture
 
-## 📱 Mobile Access (ngrok)
+### Composite weights (sum to 1.0 per funnel)
 
-Access the dashboard from your phone — anywhere, not just on Wi-Fi.
+| Dimension | Large Cap | Mid Cap | Small Cap |
+|---|---|---|---|
+| Technical | 15% | 15% | 20% |
+| Fundamental | 40% | 30% | 25% |
+| Institutional | 20% | 15% | 10% |
+| Risk | 15% | 10% | 10% |
+| Relative Strength | 5% | 25% | 30% |
+| Sentiment (Ollama) | 5% | 5% | 5% |
 
-### Step 1: Install ngrok
-1. Sign up free at [ngrok.com](https://ngrok.com/signup)
-2. Download from [ngrok.com/download](https://ngrok.com/download)
-3. Unzip `ngrok.exe` to a folder and add to your system PATH
+### Fundamental sub-weights
 
-### Step 2: Authenticate (one-time)
-```
-ngrok config add-authtoken YOUR_TOKEN_FROM_DASHBOARD
-```
+**Large Cap** — quality and cash-flow focus: ROCE, D/E, ICR, ROE, Lynch Ratio dominate.
 
-### Step 3: Enable in `config.py`
-```python
-NGROK_CONFIG = {
-    "auth_token": "your_token_here",
-    "enabled": True,
-}
-```
+**Mid Cap** — growth focus: PEG (22%) and 5-year sales growth (22%) dominate; absolute PE de-emphasised.
 
-### Step 4: Run the app
-The tunnel starts automatically. A public URL (like `https://abc123.ngrok-free.app`) appears in the sidebar — open it on your phone.
+**Small Cap** — pure growth: PEG (25%) and 5-year sales growth (25%) dominate.
 
-You can also click **"▶️ Start Tunnel Now"** in the sidebar without changing config.
+### Quality gate
 
-> **Note**: Free ngrok gives you a new URL each time. Paid plans ($8/mo) give a fixed subdomain.
+A stock must pass at least 6 of 10 quality checks **and** have non-null ROCE, promoter holding, and debt/equity (scraped from Screener.in) to appear in the portfolio. Stocks that fail the gate are shown in the full rankings table but not selected as picks.
 
-## Customisation
+---
 
-- **Change weights**: Use sidebar sliders, or edit `WEIGHTS` in `config.py`
-- **Change stock universe**: Edit `NIFTY_50_TICKERS` in `config.py`
-- **Adjust thresholds**: Tweak `TECH_CONFIG`, `FUND_CONFIG`, `RISK_CONFIG` in `config.py`
-- **Add more indicators**: Extend `compute_technical_score()` in `scoring.py`
+## Data Sources
 
-## Limitations & Disclaimer
+| Source | Data | Cache TTL |
+|---|---|---|
+| Yahoo Finance (yfinance) | OHLCV prices, fundamentals | 4 h (price), 7 d (fundamentals) |
+| Screener.in | ROCE, promoter holding, pledged %, PEG, 5-year growth rates | 7 d |
+| NSE via yfinance | Nifty 50 index, India VIX | Live patch on top of history |
+| ET / Moneycontrol / Business Standard RSS | News headlines for Ollama sentiment | 24 h |
 
-- Data is **end-of-day** (not real-time) from Yahoo Finance
-- Fundamental data from yfinance can occasionally be missing or stale
-- FII/DII flow data is approximated via OBV (not actual exchange data)
-- **This is NOT financial advice.** It's a decision-support tool. Always do your own research.
+All data is fetched with automatic exponential-backoff retry (up to 3 attempts, 2 s / 4 s delays) to handle transient Yahoo Finance rate-limit errors.
 
-## Future Improvements
+---
 
-- [x] Email daily picks to multiple recipients
-- [x] Mobile access via ngrok tunnel
-- [ ] Add actual FII/DII flow scraping from NSE/MoneyControl
-- [ ] Add screener.in scraping for promoter holding data
-- [ ] Backtesting module to validate the scoring model on historical data
-- [ ] Telegram bot integration for daily alerts
-- [ ] Fixed ngrok subdomain for permanent mobile URL
+## Mobile Access (ngrok)
+
+1. Sign up free at [ngrok.com](https://ngrok.com) and download `ngrok`.
+2. Authenticate once: `ngrok config add-authtoken YOUR_TOKEN`
+3. Click **▶️ Start Tunnel** in the sidebar — a public URL appears that you can open on any device.
+
+---
+
+## Disclaimer
+
+NiftyScout is a **decision-support tool**, not financial advice. All scores and signals are algorithmic and do not account for macroeconomic events, management quality, or other qualitative factors. Always do your own research before investing.

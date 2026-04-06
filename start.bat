@@ -13,5 +13,10 @@ echo    NiftyScout - Starting...
 echo    Dashboard: http://localhost:8501
 echo  ============================================
 echo.
+
+REM Start Ollama in the background (silent, ignored if already running)
+start "" /B ollama serve >nul 2>&1
+timeout /t 2 /nobreak >nul
+
 streamlit run app.py
 pause

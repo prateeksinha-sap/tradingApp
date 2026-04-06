@@ -13,7 +13,7 @@ from config import (
     APP_TITLE, APP_SUBTITLE, WEIGHTS, EMAIL_CONFIG, NGROK_CONFIG,
     POSITION_CONFIG, BACKTEST_CONFIG, ALLOCATION, TOP_N_PICKS,
     ALL_TICKERS, LARGE_CAP_TICKERS, MID_CAP_TICKERS, SMALL_CAP_TICKERS,
-    OLLAMA_CONFIG,
+    OLLAMA_CONFIG, PSU_TICKERS,
 )
 from data_fetcher import (
     fetch_price_data, fetch_fundamentals,
@@ -87,6 +87,17 @@ with st.sidebar:
         st.caption("✦ Lynch weighted in Large Cap fundamental score")
     else:
         st.caption("~ Lynch shown for reference only — not scored")
+    include_psus = st.toggle(
+        "🏛️ Include PSUs",
+        value=False,
+        help="PSUs (state-owned enterprises) are excluded by default — they tend to "
+             "underperform on ROCE, promoter holding quality, and capital allocation. "
+             "Toggle ON to include them in the universe.",
+    )
+    if include_psus:
+        st.caption(f"🏛️ PSUs included (+{len(PSU_TICKERS)} stocks in universe)")
+    else:
+        st.caption(f"🏛️ PSUs excluded ({len(PSU_TICKERS)} stocks filtered out)")
     st.divider()
     st.markdown("### 🧠 Sentiment (Ollama)")
     _ollama_ok = is_ollama_running()
@@ -179,20 +190,23 @@ with st.sidebar:
 st.markdown(f"# 🎯 {APP_TITLE}")
 st.caption(f"{APP_SUBTITLE} · {datetime.now().strftime('%A, %d %B %Y')}")
 
+# ── Active ticker universe (PSU toggle applied) ───────────────────────────────
+active_tickers = ALL_TICKERS if include_psus else [t for t in ALL_TICKERS if t not in PSU_TICKERS]
+
 # ── Data Loading ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_all_data():
-    price_data = fetch_price_data(ALL_TICKERS)
-    yf_fund = fetch_fundamentals(ALL_TICKERS)
+def load_all_data(tickers):
+    price_data = fetch_price_data(tickers)
+    yf_fund = fetch_fundamentals(tickers)
     screener = fetch_screener_data(list(yf_fund.keys()))
     fund = merge_fundamentals(yf_fund, screener)
     nifty_df = fetch_nifty_index()
     return price_data, fund, nifty_df
 
 with st.status("📡 Loading market data...", expanded=True) as status:
-    st.write(f"Fetching {len(ALL_TICKERS)} stocks across Large/Mid/Small caps...")
-    price_data, fundamentals, nifty_df = load_all_data()
-    st.write(f"✅ Loaded {len(price_data)} stocks with Screener.in data")
+    st.write(f"Fetching {len(active_tickers)} stocks across Large/Mid/Small caps...")
+    price_data, fundamentals, nifty_df = load_all_data(active_tickers)
+    st.write(f"✅ Loaded {len(price_data)} stocks with Screener.in data" + ("" if include_psus else f" (PSUs excluded)"))
     st.write("Scoring across 3 funnels...")
     all_ranked, picks_by_tier = rank_stocks(price_data, fundamentals, nifty_df, use_lynch=use_lynch)
     portfolio = picks_by_tier["large"] + picks_by_tier["mid"] + picks_by_tier["small"]
@@ -212,7 +226,7 @@ if st.session_state.get("run_full_sentiment") and use_sentiment and is_ollama_ru
     st.session_state["run_full_sentiment"] = False
     with st.status("🧠 Running full sentiment scan...", expanded=True) as _ss:
         def _sent_prog(p, msg): _ss.write(msg)
-        _sentiment_data = fetch_sentiment_batch(ALL_TICKERS, fundamentals, _sent_prog)
+        _sentiment_data = fetch_sentiment_batch(active_tickers, fundamentals, _sent_prog)
         _ss.update(label=f"✅ Sentiment complete — {len(_sentiment_data)} stocks", state="complete", expanded=False)
     # Re-rank with full sentiment
     all_ranked, picks_by_tier = rank_stocks(
@@ -538,5 +552,5 @@ if st.button("🚀 Run Backtest", use_container_width=True, type="primary"):
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption(f"🎯 NiftyScout v4 · Alpha Engine · {len(ALL_TICKERS)} stocks · "
+st.caption(f"🎯 NiftyScout v4 · Alpha Engine · {len(active_tickers)} stocks · "
            f"{datetime.now().strftime('%Y-%m-%d %H:%M')} · Not financial advice")

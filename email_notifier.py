@@ -13,10 +13,36 @@ from config import EMAIL_CONFIG
 
 
 def _get_credentials():
-    sender = EMAIL_CONFIG["sender_email"] or os.environ.get("NIFTYSCOUT_EMAIL", "")
-    password = EMAIL_CONFIG["sender_password"] or os.environ.get("NIFTYSCOUT_EMAIL_PASSWORD", "")
-    recipients = EMAIL_CONFIG["recipients"]
-    return sender, password, recipients
+    """
+    Credential lookup order (first match wins):
+      1. st.secrets["email"] — Streamlit Cloud or .streamlit/secrets.toml
+      2. NIFTYSCOUT_EMAIL / NIFTYSCOUT_EMAIL_PASSWORD env vars (loaded from .env by config.py)
+      3. EMAIL_CONFIG hardcoded values (legacy fallback, intentionally left blank)
+    """
+    sender = password = ""
+
+    # 1 — Streamlit secrets
+    try:
+        import streamlit as st
+        _s = st.secrets.get("email", {})
+        sender = _s.get("sender_email", "")
+        password = _s.get("sender_password", "")
+    except Exception:
+        pass
+
+    # 2 — Environment variables
+    if not sender:
+        sender = os.environ.get("NIFTYSCOUT_EMAIL", "")
+    if not password:
+        password = os.environ.get("NIFTYSCOUT_EMAIL_PASSWORD", "")
+
+    # 3 — Config fallback (empty by default; kept for backwards compat)
+    if not sender:
+        sender = EMAIL_CONFIG.get("sender_email", "")
+    if not password:
+        password = EMAIL_CONFIG.get("sender_password", "")
+
+    return sender, password, EMAIL_CONFIG["recipients"]
 
 
 def is_email_configured() -> bool:
