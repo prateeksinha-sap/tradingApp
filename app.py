@@ -37,30 +37,135 @@ from performance_tracker import (
 
 st.set_page_config(page_title=APP_TITLE, page_icon="🎯", layout="wide", initial_sidebar_state="expanded")
 
-# ── Theme-Aware CSS ──────────────────────────────────────────────────────────
+# ── Premium Terminal CSS ──────────────────────────────────────────────────────
 st.markdown("""<style>
-.pick-card{border:1px solid rgba(128,128,128,0.25);border-radius:14px;padding:18px;margin-bottom:10px;background:rgba(128,128,128,0.06);}
-.pick-card:hover{border-color:rgba(99,102,241,0.5);}
-.score-badge{display:inline-flex;align-items:center;justify-content:center;width:54px;height:54px;border-radius:50%;border:3px solid currentColor;font-size:1.3rem;font-weight:900;line-height:1;}
-.score-badge.high{color:#22c55e;}.score-badge.mid{color:#f59e0b;}.score-badge.low{color:#ef4444;}
-.pick-name{font-size:1.05rem;font-weight:700;}.pick-meta{font-size:0.78rem;opacity:0.6;}
-.sub-score-row{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;}
-.sub-pill{font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:20px;border:1px solid rgba(128,128,128,0.2);background:rgba(128,128,128,0.08);}
-.target-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px;}
-.target-box{border-radius:8px;padding:10px;text-align:center;border:1px solid rgba(128,128,128,0.2);background:rgba(128,128,128,0.06);}
-.target-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:0.8px;opacity:0.5;margin-bottom:2px;}
-.target-value{font-size:1rem;font-weight:700;}.target-pct{font-size:0.72rem;font-weight:600;}
-.target-pct.green{color:#22c55e;}.target-pct.red{color:#ef4444;}
-.hold-badge{display:inline-block;margin-top:6px;padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;background:rgba(99,102,241,0.12);color:#6366f1;border:1px solid rgba(99,102,241,0.25);}
-.signal-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.68rem;font-weight:600;text-transform:uppercase;}
-.signal-badge.bullish{background:rgba(34,197,94,0.15);color:#16a34a;}
-.signal-badge.bearish{background:rgba(239,68,68,0.15);color:#dc2626;}
-.signal-badge.neutral{background:rgba(128,128,128,0.15);opacity:0.7;}
-.funnel-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.65rem;font-weight:700;text-transform:uppercase;margin-right:4px;}
-.funnel-tag.large{background:rgba(59,130,246,0.15);color:#3b82f6;}
-.funnel-tag.mid{background:rgba(168,85,247,0.15);color:#a855f7;}
-.funnel-tag.small{background:rgba(249,115,22,0.15);color:#f97316;}
-div[data-testid="stMetric"]{border-radius:10px;padding:12px;border:1px solid rgba(128,128,128,0.2);background:rgba(128,128,128,0.06);}
+/* ── Pick card — glassmorphism ── */
+.pick-card {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.pick-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 0 20px -5px rgba(99, 102, 241, 0.15);
+}
+
+/* ── Score badge — glow ring ── */
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.score-badge.high { color: #22c55e; box-shadow: 0 0 15px rgba(34, 197, 94, 0.35); }
+.score-badge.mid  { color: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.35); }
+.score-badge.low  { color: #ef4444; box-shadow: 0 0 15px rgba(239, 68,  68, 0.35); }
+
+/* ── Typography ── */
+.pick-name { font-size: 1.05rem; font-weight: 700; }
+.pick-meta { font-size: 0.78rem; opacity: 0.6; }
+
+/* ── Sub-score pills ── */
+.sub-score-row { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.sub-pill {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ── Target grid ── */
+.target-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.target-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+}
+.target-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.45;
+  margin-bottom: 2px;
+}
+.target-value { font-size: 1rem; font-weight: 700; }
+.target-pct   { font-size: 0.72rem; font-weight: 600; }
+.target-pct.green { color: #22c55e; }
+.target-pct.red   { color: #ef4444; }
+
+/* ── Hold badge ── */
+.hold-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+/* ── Signal badges ── */
+.signal-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.signal-badge.bullish { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
+.signal-badge.bearish { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+.signal-badge.neutral { background: rgba(148, 163, 184, 0.08); color: #94a3b8; border: 1px solid rgba(148,163,184,0.15); }
+
+/* ── Funnel tags ── */
+.funnel-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-right: 4px;
+  letter-spacing: 0.4px;
+}
+.funnel-tag.large { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+.funnel-tag.mid   { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.2); }
+.funnel-tag.small { background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.2); }
+
+/* ── Metric cards ── */
+div[data-testid="stMetric"] {
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(30, 41, 59, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
 </style>""", unsafe_allow_html=True)
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -310,6 +415,80 @@ st.markdown("---")
 st.markdown("### 🏆 Your 15-Stock Portfolio")
 st.caption(f"🔵 {ALLOCATION['stocks_per_bucket']['large']} Large Caps (30%) · 🟣 {ALLOCATION['stocks_per_bucket']['mid']} Mid Caps (50%) · 🟠 {ALLOCATION['stocks_per_bucket']['small']} Small Caps (20%)")
 
+def _price_spectrum_bar(ei: dict, current_price: float) -> str:
+    """
+    Returns an HTML string: a red→amber→green gradient bar spanning
+    stop_loss (left) to target_2 (right), with a white dot marking current_price.
+    Returns an empty string when the values are missing or degenerate.
+    """
+    sl   = ei.get("stop_loss",  0) or 0
+    t1   = ei.get("target_1",   0) or 0
+    t2   = ei.get("target_2",   0) or 0
+    price = current_price or 0
+
+    # Need a non-degenerate range to draw anything meaningful
+    span = t2 - sl
+    if span <= 0 or sl <= 0 or t2 <= 0:
+        return ""
+
+    # Percentage positions along the bar (0–100), clamped
+    t1_pct    = max(0, min(100, (t1    - sl) / span * 100))
+    price_pct = max(0, min(100, (price - sl) / span * 100))
+
+    # Gradient: red at 0% → amber at T1 position → green at 100%
+    gradient = (
+        f"linear-gradient(to right, "
+        f"#ef4444 0%, "
+        f"#f59e0b {t1_pct:.1f}%, "
+        f"#22c55e 100%)"
+    )
+
+    # Price label: show above the dot, flipped to stay inside bar edges
+    label_align = "right" if price_pct > 85 else ("left" if price_pct < 15 else "center")
+    label_transform = {
+        "right":  "translateX(-100%)",
+        "left":   "translateX(0%)",
+        "center": "translateX(-50%)",
+    }[label_align]
+
+    return f"""
+<div style="margin:12px 0 4px;padding:0 2px;">
+  <!-- bar track -->
+  <div style="position:relative;height:8px;border-radius:6px;background:{gradient};
+              box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);">
+
+    <!-- T1 tick -->
+    <div style="position:absolute;top:0;bottom:0;left:{t1_pct:.1f}%;
+                width:1px;background:rgba(255,255,255,0.25);"></div>
+
+    <!-- current price dot -->
+    <div style="position:absolute;top:50%;left:{price_pct:.1f}%;
+                transform:translate(-50%,-50%);
+                width:13px;height:13px;border-radius:50%;
+                background:#ffffff;
+                box-shadow:0 0 8px rgba(255,255,255,0.7),0 0 0 2px rgba(15,23,42,0.9);
+                z-index:2;">
+    </div>
+
+    <!-- price label above dot -->
+    <div style="position:absolute;bottom:14px;left:{price_pct:.1f}%;
+                transform:{label_transform};
+                font-size:0.6rem;font-weight:700;color:#f1f5f9;
+                white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,0.8);">
+      ₹{price:,.0f}
+    </div>
+  </div>
+
+  <!-- axis labels -->
+  <div style="display:flex;justify-content:space-between;margin-top:5px;
+              font-size:0.58rem;letter-spacing:0.2px;">
+    <span style="color:#f87171;">SL ₹{sl:,.0f}</span>
+    <span style="color:#fbbf24;opacity:0.8;">T1 ₹{t1:,.0f}</span>
+    <span style="color:#4ade80;">T2 ₹{t2:,.0f}</span>
+  </div>
+</div>"""
+
+
 def render_pick_card(pick, rank_emoji=""):
     s = pick["composite"]
     sc = "high" if s >= 65 else ("mid" if s >= 50 else "low")
@@ -381,7 +560,8 @@ def render_pick_card(pick, rank_emoji=""):
         f'<div class="target-box"><div class="target-label">Target 2</div><div class="target-value">₹{ei.get("target_2",0):,.2f}</div><div class="target-pct green">+{ei.get("target_2_pct",0):.1f}%</div></div>'
         f'<div class="target-box"><div class="target-label">R:R</div><div class="target-value">{ei.get("risk_reward",0):.1f}x</div></div>'
         f'</div>'
-        f'<div><span class="hold-badge">⏱️ {ei.get("hold_days_min","?")}–{ei.get("hold_days_max","?")}d · {ei.get("hold_label","")}</span></div>'
+        + _price_spectrum_bar(ei, pick.get("current_price", 0))
+        + f'<div><span class="hold-badge">⏱️ {ei.get("hold_days_min","?")}–{ei.get("hold_days_max","?")}d · {ei.get("hold_label","")}</span></div>'
         f'</div>'
     )
     st.markdown(card, unsafe_allow_html=True)
@@ -413,6 +593,14 @@ with tab_small:
 st.markdown("---")
 st.markdown("### 📋 Full Rankings")
 
+def _sparkline(ticker):
+    """Return the last 30 daily closes for ticker as a list of floats, or None."""
+    df = price_data.get(ticker)
+    if df is None or "Close" not in df.columns or len(df) == 0:
+        return None
+    closes = df["Close"].dropna().tail(30).tolist()
+    return closes if len(closes) >= 2 else None
+
 rdf = pd.DataFrame([{
     "Rank": i+1, "Stock": r["name"], "Ticker": r["ticker"].replace(".NS",""),
     "Funnel": r["funnel"].title(), "Sector": r["sector"],
@@ -420,6 +608,7 @@ rdf = pd.DataFrame([{
     "Inst": r["institutional"], "Risk": r["risk"], "RS": r.get("relative_str", 50),
     "Lynch": r.get("details", {}).get("fund", {}).get("lynch_ratio"),
     "Sentiment": r.get("sentiment") or _sentiment_data.get(r["ticker"], {}).get("score"),
+    "Trend (30d)": _sparkline(r["ticker"]),
     "Target 1": f"₹{r['exit']['target_1']:,.0f}" if r.get("exit",{}).get("target_1") else "—",
 } for i, r in enumerate(all_ranked)])
 
@@ -454,6 +643,11 @@ st.dataframe(rdf, hide_index=True, use_container_width=True, column_config={
         help="Ollama news sentiment score (0=bearish · 50=neutral · 100=bullish). "
              "Sourced from Indian market RSS feeds. Run sentiment scan to populate.",
         min_value=0, max_value=100, format="%.0f",
+    ),
+    "Trend (30d)": st.column_config.LineChartColumn(
+        "Trend (30d)",
+        help="Last 30 trading days of closing prices.",
+        y_min=0,
     ),
 })
 
