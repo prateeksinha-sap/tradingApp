@@ -121,7 +121,8 @@ TECH_CONFIG = {
     "macd_fast": 12, "macd_slow": 26, "macd_signal": 9,
     "sma_short": 20, "sma_long": 50, "sma_200": 200,
     "volume_spike_threshold": 1.5, "lookback_days": 300,
-    "rs_period_days": 63,  # NEW: Relative Strength vs Nifty (3 months)
+    "rs_period_days": 63,    # Relative Strength vs Nifty — 3-month window
+    "rs_12m_period_days": 252,  # Relative Strength vs Nifty — 12-month window
 }
 
 FUND_CONFIG = {

@@ -94,27 +94,44 @@ def compute_technical_score(df, nifty_df=None):
         else: vol_sc = 30
     else: vr = 1.0; vol_sc = 50
 
-    # Relative Strength vs Nifty
-    rs_3m = None; rs_sc = 50
-    if nifty_df is not None and len(close) >= 63 and len(nifty_df) >= 63:
+    # Relative Strength vs Nifty — blended 3-month (40%) + 12-month (60%)
+    # 3-month captures recent momentum; 12-month rewards persistent compounders.
+    rs_3m = None; rs_12m = None; rs_sc = 50
+    if nifty_df is not None:
+        nc = nifty_df["Close"]
         try:
-            nc = nifty_df["Close"]
-            sr = (close.iloc[-1] / close.iloc[-63] - 1) * 100
-            nr = (nc.iloc[-1] / nc.iloc[-63] - 1) * 100
-            rs_3m = sr - nr
-            if rs_3m > 15: rs_sc = 95
-            elif rs_3m > 8: rs_sc = 80
-            elif rs_3m > 2: rs_sc = 65
-            elif rs_3m > -2: rs_sc = 50
-            elif rs_3m > -8: rs_sc = 35
-            else: rs_sc = 15
+            if len(close) >= 63 and len(nc) >= 63:
+                sr_3m = (close.iloc[-1] / close.iloc[-63] - 1) * 100
+                nr_3m = (nc.iloc[-1]   / nc.iloc[-63]   - 1) * 100
+                rs_3m = sr_3m - nr_3m
+
+            if len(close) >= 252 and len(nc) >= 252:
+                sr_12m = (close.iloc[-1] / close.iloc[-252] - 1) * 100
+                nr_12m = (nc.iloc[-1]   / nc.iloc[-252]   - 1) * 100
+                rs_12m = sr_12m - nr_12m
         except: pass
+
+        def _rs_to_score(rs_val):
+            if rs_val > 15: return 95
+            elif rs_val > 8:  return 80
+            elif rs_val > 2:  return 65
+            elif rs_val > -2: return 50
+            elif rs_val > -8: return 35
+            else:             return 15
+
+        if rs_3m is not None and rs_12m is not None:
+            # Full blend: 40% short-term momentum + 60% long-term persistence
+            rs_sc = _rs_to_score(rs_3m) * 0.4 + _rs_to_score(rs_12m) * 0.6
+        elif rs_3m is not None:
+            # Younger stocks with < 1 year of history: use 3-month only
+            rs_sc = _rs_to_score(rs_3m)
 
     tech = rsi_sc * 0.20 + macd_sc * 0.20 + ma_sc * 0.20 + dma_sc * 0.25 + vol_sc * 0.15
 
     return {
         "technical": round(_clamp(tech), 1), "relative_str": round(_clamp(rs_sc), 1),
-        "rs_3m": round(rs_3m, 1) if rs_3m is not None else None,
+        "rs_3m":  round(rs_3m,  1) if rs_3m  is not None else None,
+        "rs_12m": round(rs_12m, 1) if rs_12m is not None else None,
         "rsi": round(rsi, 1), "rsi_score": round(rsi_sc, 1),
         "macd_signal": macd_sig, "macd_score": round(macd_sc, 1),
         "ma_crossover": ma_cross, "ma_score": round(ma_sc, 1),
@@ -401,7 +418,7 @@ def score_stock(ticker, price_df, fundamentals, nifty_df=None, use_lynch=True, s
         "current_price": round(price_df["Close"].iloc[-1], 2) if price_df is not None and len(price_df) > 0 else None,
         "exit": exit_info,
         "details": {"tech": tech, "fund": fund, "inst": inst, "risk": risk,
-                    "rs": {"rs_3m": tech.get("rs_3m")}, "sentiment": sentiment},
+                    "rs": {"rs_3m": tech.get("rs_3m"), "rs_12m": tech.get("rs_12m")}, "sentiment": sentiment},
     }
 
 def rank_stocks(price_data, fundamentals, nifty_df=None, progress_callback=None, use_lynch=True, sentiment_data=None):
