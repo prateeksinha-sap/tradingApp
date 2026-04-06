@@ -345,12 +345,15 @@ def _build_candlestick_chart(df: pd.DataFrame, title: str = "") -> go.Figure:
         increasing_line_color="#22c55e", decreasing_line_color="#ef4444",
         increasing_fillcolor="rgba(34,197,94,0.7)", decreasing_fillcolor="rgba(239,68,68,0.7)",
     ), row=1, col=1)
-    sma20 = df["Close"].rolling(20).mean()
-    sma50 = df["Close"].rolling(50).mean()
+    sma20  = df["Close"].rolling(20).mean()
+    sma50  = df["Close"].rolling(50).mean()
+    sma200 = df["Close"].rolling(200).mean()
     fig.add_trace(go.Scatter(x=df.index, y=sma20, name="SMA 20",
                              line=dict(color="#f59e0b", width=1.5, dash="dot")), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=sma50, name="SMA 50",
                              line=dict(color="#818cf8", width=1.5)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=sma200, name="SMA 200",
+                             line=dict(color="#e2e8f0", width=2, dash="dash")), row=1, col=1)
     vol_colors = ["#22c55e" if c >= o else "#ef4444"
                   for c, o in zip(df["Close"], df["Open"])]
     fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Volume",
