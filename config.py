@@ -148,7 +148,7 @@ APP_SUBTITLE = "Alpha Engine — 15-Stock Growth Portfolio"
 
 POSITION_CONFIG = {"default_capital": 500000, "max_position_pct": 12, "risk_per_trade_pct": 2}
 
-PORTFOLIO_CONFIG = {"large_cap_picks": 4, "mid_cap_picks": 7, "small_cap_picks": 4}
+PORTFOLIO_CONFIG = {"large_cap_picks": 4, "mid_cap_picks": 7, "small_cap_picks": 4, "max_per_sector": 3}
 
 BACKTEST_CONFIG = {
     "lookback_years": 3, "rebalance_days": 63,

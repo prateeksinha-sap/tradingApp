@@ -405,11 +405,31 @@ def rank_stocks(price_data, fundamentals, nifty_df=None, progress_callback=None,
     for k in buckets: buckets[k].sort(key=lambda x: x["composite"], reverse=True)
 
     pc = PORTFOLIO_CONFIG
-    picks = {
-        "large": buckets["large"][:pc["large_cap_picks"]],
-        "mid": buckets["mid"][:pc["mid_cap_picks"]],
-        "small": buckets["small"][:pc["small_cap_picks"]],
+    max_sector = pc.get("max_per_sector", 3)
+    funnel_limits = {
+        "large": pc["large_cap_picks"],
+        "mid":   pc["mid_cap_picks"],
+        "small": pc["small_cap_picks"],
     }
+
+    # Build picks with a cross-funnel sector concentration cap.
+    # sector_counts is shared across all three funnels so that, e.g.,
+    # 2 Technology picks already chosen in Large Cap count against the
+    # remaining Technology budget for Mid and Small Cap funnels.
+    sector_counts: dict[str, int] = {}
+    picks: dict[str, list] = {"large": [], "mid": [], "small": []}
+
+    for funnel in ("large", "mid", "small"):
+        limit = funnel_limits[funnel]
+        for stock in buckets[funnel]:
+            if len(picks[funnel]) >= limit:
+                break
+            sector = (stock.get("sector") or "Unknown").strip()
+            if sector_counts.get(sector, 0) >= max_sector:
+                continue  # sector cap reached — try the next highest scorer
+            picks[funnel].append(stock)
+            sector_counts[sector] = sector_counts.get(sector, 0) + 1
+
     all_ranked = buckets["large"] + buckets["mid"] + buckets["small"]
     all_ranked.sort(key=lambda x: x["composite"], reverse=True)
     if progress_callback: progress_callback(1.0, "Scoring complete!")
