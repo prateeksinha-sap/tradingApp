@@ -251,14 +251,16 @@ with st.sidebar:
         st.session_state["email_recipients"] = list(EMAIL_CONFIG.get("recipients", []))
 
     # Add a new recipient
-    with st.form("add_recipient_form", clear_on_submit=True):
-        new_email = st.text_input("Add recipient", placeholder="friend@gmail.com", label_visibility="collapsed")
-        if st.form_submit_button("➕ Add", use_container_width=True):
-            new_email = new_email.strip()
-            if new_email and "@" in new_email and new_email not in st.session_state["email_recipients"]:
-                st.session_state["email_recipients"].append(new_email)
-            elif new_email in st.session_state["email_recipients"]:
-                st.toast("Already in list", icon="ℹ️")
+    new_email = st.text_input("Add recipient", placeholder="friend@gmail.com",
+                              label_visibility="collapsed", key="new_email_input")
+    if st.button("➕ Add", use_container_width=True, key="add_email_btn"):
+        addr = new_email.strip()
+        if addr and "@" in addr and addr not in st.session_state["email_recipients"]:
+            st.session_state["email_recipients"].append(addr)
+            st.session_state["new_email_input"] = ""
+            st.rerun()
+        elif addr in st.session_state["email_recipients"]:
+            st.toast("Already in list", icon="ℹ️")
 
     # Pick who to send to
     all_recipients = st.session_state["email_recipients"]
